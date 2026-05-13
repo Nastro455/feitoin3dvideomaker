@@ -86,3 +86,19 @@ Fluxo ideal:
 3. Corrigir o ponto em cada perspectiva.
 4. Aplicar alinhamento.
 5. Exportar com “Travar objeto principal” ativado.
+
+
+## Correção — Trava do assunto em ponto fixo de tela
+
+A lógica anterior ainda alinhava as perspectivas entre si, mas não mantinha o ponto âncora em uma posição fixa ao longo do tempo.  
+Agora, durante a exportação:
+
+- o ponto âncora vira um alvo fixo de tela;
+- cada perspectiva é deslocada para levar o ponto atual até esse alvo;
+- isso reduz o “samba” do assunto e faz o fundo se mover ao redor dele.
+
+Para melhores resultados:
+- marque um ponto pequeno e contrastado;
+- corrija esse ponto em todas as perspectivas;
+- ative “Travar objeto principal”;
+- ative o tracking experimental apenas se o assunto realmente se mover ao longo do vídeo.

@@ -74,7 +74,7 @@
 const $=s=>document.querySelector(s);
 const videoInput=$('#videoInput'),dropzone=$('#dropzone'),layoutSelect=$('#layoutSelect'),frameCountSelect=$('#frameCount'),maxDurationSelect=$('#maxDuration'),loadFrameBtn=$('#loadFrameBtn'),selectPointBtn=$('#selectPointBtn'),applyPointBtn=$('#applyPointBtn'),clearPointBtn=$('#clearPointBtn'),exportBtn=$('#exportBtn'),downloadLink=$('#downloadLink'),sourceVideo=$('#sourceVideo'),canvas=$('#previewCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),statusEl=$('#status'),thumbsEl=$('#thumbs'),previewPlayPauseBtn=$('#previewPlayPauseBtn'),pointAdjustOverlay=$('#pointAdjustOverlay'),pointAdjustHead=$('#pointAdjustHead'),pointAdjustToggle=$('#pointAdjustToggle'),framePointButtons=$('#framePointButtons');
 const wiggleSpeedInput=$('#wiggleSpeed'),wiggleSpeedValue=$('#wiggleSpeedValue'),motionStyleSelect=$('#motionStyle'),outputRatioSelect=$('#outputRatio'),outputQualitySelect=$('#outputQuality'),exportFormatSelect=$('#exportFormat'),anchorLockToggle=$('#anchorLockToggle'),trackPointToggle=$('#trackPointToggle'),effectSelect=$('#effectSelect'),effectIntensityInput=$('#effectIntensity'),effectIntensityValue=$('#effectIntensityValue'),exposureAdjustInput=$('#exposureAdjust'),exposureAdjustValue=$('#exposureAdjustValue'),sharpnessAdjustInput=$('#sharpnessAdjust'),sharpnessAdjustValue=$('#sharpnessAdjustValue'),glowAdjustInput=$('#glowAdjust'),glowAdjustValue=$('#glowAdjustValue'),rgbAdjustInput=$('#rgbAdjust'),rgbAdjustValue=$('#rgbAdjustValue'),progressOverlay=$('#progressOverlay'),progressRing=$('#progressRing'),progressText=$('#progressText'),progressTitle=$('#progressTitle'),progressNote=$('#progressNote');
-let videoUrl=null,frameCanvases=[],alignedFrames=[],keypoint=null,perspectivePoints=[],selectedPointFrame=0,pointPanelMinimized=true,selectingPoint=false,alignmentApplied=false,animationId=null,lastPreviewTimestamp=0,previewPlaying=true,pausedPreviewTimestamp=0,manualOffsetX=0,manualOffsetY=0,manualZoom=1,isDragging=false,dragStartX=0,dragStartY=0,dragStartOffsetX=0,dragStartOffsetY=0,mediaRecorder=null,recordedChunks=[],isExporting=false,trackingTemplates=[],anchorOffsets=[],activeAlignmentPoints=null,activeAnchorOffsets=null;
+let videoUrl=null,frameCanvases=[],alignedFrames=[],keypoint=null,perspectivePoints=[],selectedPointFrame=0,pointPanelMinimized=true,selectingPoint=false,alignmentApplied=false,animationId=null,lastPreviewTimestamp=0,previewPlaying=true,pausedPreviewTimestamp=0,manualOffsetX=0,manualOffsetY=0,manualZoom=1,isDragging=false,dragStartX=0,dragStartY=0,dragStartOffsetX=0,dragStartOffsetY=0,mediaRecorder=null,recordedChunks=[],isExporting=false,trackingTemplates=[],anchorOffsets=[],renderAnchorPoint=null,activeAlignmentPoints=null,activeAnchorOffsets=null,activeRenderAnchorPoint=null;
 const setStatus=m=>statusEl.textContent=m, clamp=(v,min,max)=>Math.max(min,Math.min(max,v)), getFrameCount=()=>Number(frameCountSelect.value), getLayout=()=>layoutSelect.value;
 function updateRangeLabels(){
   wiggleSpeedValue.textContent=wiggleSpeedInput.value;
@@ -179,7 +179,7 @@ function loadVideoFile(file){
   if(videoUrl)URL.revokeObjectURL(videoUrl);
   videoUrl=URL.createObjectURL(file);
 
-  frameCanvases=[];alignedFrames=[];keypoint=null;perspectivePoints=[];selectedPointFrame=0;trackingTemplates=[];anchorOffsets=[];activeAlignmentPoints=null;activeAnchorOffsets=null;alignmentApplied=false;
+  frameCanvases=[];alignedFrames=[];keypoint=null;perspectivePoints=[];selectedPointFrame=0;trackingTemplates=[];anchorOffsets=[];renderAnchorPoint=null;activeAlignmentPoints=null;activeAnchorOffsets=null;activeRenderAnchorPoint=null;alignmentApplied=false;
   manualOffsetX=manualOffsetY=0;manualZoom=1;
   cancelAnimationFrame(animationId);
   downloadLink.classList.remove('show');
@@ -215,8 +215,13 @@ function cropRectToAspect(w,h,aspect){const a=w/h;let cw=w,ch=h;if(a>aspect)cw=h
 function applyManualFraming(rect,bw,bh){const z=clamp(manualZoom,1,4),w=rect.width/z,h=rect.height/z,cx=rect.x+rect.width/2+manualOffsetX,cy=rect.y+rect.height/2+manualOffsetY;return{x:clamp(cx-w/2,0,bw-w),y:clamp(cy-h/2,0,bh-h),width:w,height:h}}
 function rebuildAlignedFrames(sourceFrames=frameCanvases){if(!sourceFrames.length)return;const bw=sourceFrames[0].width,bh=sourceFrames[0].height,{width,height,aspect}=getOutputSize(bw,bh);canvas.width=width;canvas.height=height;const baseRect=cropRectToAspect(bw,bh,aspect),crop=applyManualFraming(baseRect,bw,bh);alignedFrames=sourceFrames.map((frame,frameIndex)=>{const out=document.createElement('canvas');out.width=width;out.height=height;const c=out.getContext('2d',{willReadFrequently:true});c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';let ox=0,oy=0;
 if(alignmentApplied && anchorLockToggle.checked){
-  const off=getAnchorOffsetFor(frameIndex);
-  ox=off.x; oy=off.y;
+  const renderAnchor = getRenderAnchorPoint();
+  const points = activeAlignmentPoints || perspectivePoints;
+  const point = points[frameIndex] || keypoint;
+  if(renderAnchor && point){
+    ox = renderAnchor.x - point.x;
+    oy = renderAnchor.y - point.y;
+  }
 } else if(alignmentApplied&&(activeAlignmentPoints||perspectivePoints).length){
   const points=activeAlignmentPoints||perspectivePoints;
   const anchor=points[0]||keypoint;
@@ -230,7 +235,7 @@ function startPreviewLoop(){cancelAnimationFrame(animationId);const tick=ts=>{if
 previewPlayPauseBtn.addEventListener('click',()=>{if(!alignedFrames.length)return;previewPlaying=!previewPlaying;if(!previewPlaying)pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent=previewPlaying?'⏸ Pausar preview':'▶️ Dar play no preview';setStatus(previewPlaying?'Preview em reprodução.':'Preview pausado. Você pode marcar o ponto com mais precisão.');drawPreviewFrame(lastPreviewTimestamp)});
 selectPointBtn.addEventListener('click',()=>{if(!frameCanvases.length)return;previewPlaying=false;pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent='▶️ Dar play no preview';selectingPoint=true;canvas.classList.add('point-mode');drawPreviewFrame(lastPreviewTimestamp);setStatus('Preview pausado. Clique no ponto principal do objeto com precisão.')});
 canvas.addEventListener('click',e=>{if(!selectingPoint||!frameCanvases.length)return;const r=canvas.getBoundingClientRect();keypoint={x:(e.clientX-r.left)/r.width*frameCanvases[0].width,y:(e.clientY-r.top)/r.height*frameCanvases[0].height};perspectivePoints=frameCanvases.map(()=>({...keypoint}));selectedPointFrame=0;selectingPoint=false;canvas.classList.remove('point-mode');applyPointBtn.disabled=false;clearPointBtn.disabled=false;computeAnchorOffsets();buildTrackingTemplates();setStatus('Ponto âncora registrado em todos os quadros. Agora você pode corrigir o ponto de cada perspectiva clicando nos quadros abaixo.');renderThumbs()});
-applyPointBtn.addEventListener('click',()=>{if(!keypoint)return;if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>({...keypoint}));computeAnchorOffsets();buildTrackingTemplates();alignmentApplied=true;manualOffsetX=manualOffsetY=0;manualZoom=1;rebuildAlignedFrames();startPreviewLoop();exportBtn.disabled=false;canvas.classList.add('frame-mode');setStatus('Objeto principal travado. Dê play para conferir: o assunto deve ficar fiel e o fundo deve se mover.')});
+applyPointBtn.addEventListener('click',()=>{if(!keypoint)return;if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>({...keypoint}));computeAnchorOffsets();buildTrackingTemplates();alignmentApplied=true;manualOffsetX=manualOffsetY=0;manualZoom=1;rebuildAlignedFrames();startPreviewLoop();exportBtn.disabled=false;canvas.classList.add('frame-mode');setStatus('Objeto principal travado. Agora o ponto âncora deve permanecer na mesma posição da tela; quem deve respirar é o fundo.')});
 clearPointBtn.addEventListener('click',()=>{keypoint=null;perspectivePoints=[];selectedPointFrame=0;trackingTemplates=[];activeAlignmentPoints=null;alignmentApplied=false;manualOffsetX=manualOffsetY=0;manualZoom=1;canvas.classList.remove('frame-mode');applyPointBtn.disabled=true;clearPointBtn.disabled=true;rebuildAlignedFrames();renderThumbs();setStatus('Alinhamento limpo.')});
 function canManualFrame(){return frameCanvases.length&&!selectingPoint&&alignmentApplied}
 canvas.addEventListener('mousedown',e=>{if(!canManualFrame()||e.button!==0)return;isDragging=true;canvas.classList.add('frame-drag');dragStartX=e.clientX;dragStartY=e.clientY;dragStartOffsetX=manualOffsetX;dragStartOffsetY=manualOffsetY;e.preventDefault()});
@@ -254,6 +259,7 @@ function computeAnchorOffsets(){
   anchorOffsets=[];
   if(!perspectivePoints.length || !keypoint) return;
   const anchor = perspectivePoints[0] || keypoint;
+  renderAnchorPoint = {x: anchor.x, y: anchor.y};
   anchorOffsets = perspectivePoints.map(point => {
     const p = point || keypoint;
     return {
@@ -267,6 +273,10 @@ function getAnchorOffsetFor(frameIndex){
   const offsets = activeAnchorOffsets || anchorOffsets;
   if(!offsets || !offsets.length) return {x:0,y:0};
   return offsets[frameIndex] || {x:0,y:0};
+}
+
+function getRenderAnchorPoint(){
+  return activeRenderAnchorPoint || renderAnchorPoint || keypoint || {x:0,y:0};
 }
 
 function buildTrackingTemplates(){
@@ -390,18 +400,24 @@ if(trackPointToggle.checked&&keypoint&&trackingTemplates.length){
   trackedPoints=trackFramePoints(split,trackedPoints);
   activeAlignmentPoints=trackedPoints;
   if(anchorLockToggle.checked){
-    const a=trackedPoints[0]||keypoint;
-    activeAnchorOffsets=trackedPoints.map(p=>p?({x:a.x-p.x,y:a.y-p.y}):{x:0,y:0});
+    activeRenderAnchorPoint = renderAnchorPoint ? {...renderAnchorPoint} : (keypoint ? {...keypoint} : null);
+    activeAnchorOffsets = trackedPoints.map(p => p && activeRenderAnchorPoint
+      ? ({x: activeRenderAnchorPoint.x - p.x, y: activeRenderAnchorPoint.y - p.y})
+      : ({x:0,y:0})
+    );
   } else {
     activeAnchorOffsets=null;
+    activeRenderAnchorPoint=null;
   }
 } else {
   activeAlignmentPoints=null;
   activeAnchorOffsets=null;
+  activeRenderAnchorPoint=null;
 }
 rebuildAlignedFrames(split);
 activeAlignmentPoints=null;
 activeAnchorOffsets=null;
+activeRenderAnchorPoint=null;
 const idx=getCurrentPerspectiveIndex(performance.now()-start);exportCtx.clearRect(0,0,exportCanvas.width,exportCanvas.height);exportCtx.drawImage(alignedFrames[idx]||alignedFrames[0],0,0);if(current>=durationLimit||sourceVideo.ended){sourceVideo.pause();mediaRecorder.stop();rebuildAlignedFrames(frameCanvases);startPreviewLoop();return}requestAnimationFrame(drawExport)};requestAnimationFrame(drawExport)});
 function getRecorderMimeType(){const wants=exportFormatSelect.value==='mp4',cand=wants?['video/mp4;codecs=h264','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']:['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];return cand.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))}
 function showProgress(p,title){progressOverlay.classList.add('show');const pct=Math.round(p*100);progressText.textContent=pct+'%';progressRing.style.background='conic-gradient(var(--success) '+(pct*3.6)+'deg, rgba(255,255,255,.12) 0deg)';progressTitle.textContent=title||'Exportando vídeo 3D...';progressNote.textContent=p<.98?'Processando frames. Não feche esta aba.':'Finalizando arquivo...'}
