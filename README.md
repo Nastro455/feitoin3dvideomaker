@@ -57,3 +57,8 @@ Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5
 - A ferramenta cria um pequeno template do ponto marcado e tenta acompanhá-lo em cada perspectiva ao longo do vídeo.
 - Isso melhora a estabilização do efeito 3D quando existe movimento de câmera ou do objeto.
 - Ainda é um tracking experimental: funciona melhor com pontos de alto contraste, bem iluminados e vídeos curtos.
+
+
+## Correção — Upload após painel minimizado
+
+Corrigido um conflito em que as funções do painel de ajuste de pontos ficavam presas dentro de um evento de slider, impedindo o carregamento correto do vídeo em alguns navegadores.

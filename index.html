@@ -75,42 +75,103 @@ const videoInput=$('#videoInput'),dropzone=$('#dropzone'),layoutSelect=$('#layou
 const wiggleSpeedInput=$('#wiggleSpeed'),wiggleSpeedValue=$('#wiggleSpeedValue'),motionStyleSelect=$('#motionStyle'),outputRatioSelect=$('#outputRatio'),outputQualitySelect=$('#outputQuality'),exportFormatSelect=$('#exportFormat'),trackPointToggle=$('#trackPointToggle'),effectSelect=$('#effectSelect'),effectIntensityInput=$('#effectIntensity'),effectIntensityValue=$('#effectIntensityValue'),exposureAdjustInput=$('#exposureAdjust'),exposureAdjustValue=$('#exposureAdjustValue'),sharpnessAdjustInput=$('#sharpnessAdjust'),sharpnessAdjustValue=$('#sharpnessAdjustValue'),glowAdjustInput=$('#glowAdjust'),glowAdjustValue=$('#glowAdjustValue'),rgbAdjustInput=$('#rgbAdjust'),rgbAdjustValue=$('#rgbAdjustValue'),progressOverlay=$('#progressOverlay'),progressRing=$('#progressRing'),progressText=$('#progressText'),progressTitle=$('#progressTitle'),progressNote=$('#progressNote');
 let videoUrl=null,frameCanvases=[],alignedFrames=[],keypoint=null,perspectivePoints=[],selectedPointFrame=0,pointPanelMinimized=true,selectingPoint=false,alignmentApplied=false,animationId=null,lastPreviewTimestamp=0,previewPlaying=true,pausedPreviewTimestamp=0,manualOffsetX=0,manualOffsetY=0,manualZoom=1,isDragging=false,dragStartX=0,dragStartY=0,dragStartOffsetX=0,dragStartOffsetY=0,mediaRecorder=null,recordedChunks=[],isExporting=false,trackingTemplates=[],activeAlignmentPoints=null;
 const setStatus=m=>statusEl.textContent=m, clamp=(v,min,max)=>Math.max(min,Math.min(max,v)), getFrameCount=()=>Number(frameCountSelect.value), getLayout=()=>layoutSelect.value;
-function updateRangeLabels(){wiggleSpeedValue.textContent=wiggleSpeedInput.value;effectIntensityValue.textContent=effectIntensityInput.value+'%';const e=Number(exposureAdjustInput.value);exposureAdjustValue.textContent=e>0?'+'+e:String(e);sharpnessAdjustValue.textContent=sharpnessAdjustInput.value+'%';glowAdjustValue.textContent=glowAdjustInput.value+'%';rgbAdjustValue.textContent=rgbAdjustInput.value+'px'}
-[wiggleSpeedInput,effectIntensityInput,exposureAdjustInput,sharpnessAdjustInput,glowAdjustInput,rgbAdjustInput].forEach(i=>i.addEventListener('input',()=>{updateRangeLabels();
+function updateRangeLabels(){
+  wiggleSpeedValue.textContent=wiggleSpeedInput.value;
+  effectIntensityValue.textContent=effectIntensityInput.value+'%';
+  const e=Number(exposureAdjustInput.value);
+  exposureAdjustValue.textContent=e>0?'+'+e:String(e);
+  sharpnessAdjustValue.textContent=sharpnessAdjustInput.value+'%';
+  glowAdjustValue.textContent=glowAdjustInput.value+'%';
+  rgbAdjustValue.textContent=rgbAdjustInput.value+'px';
+}
 
 function updatePointAdjustPanel(){
+  if(!pointAdjustOverlay || !pointAdjustToggle || !framePointButtons) return;
+
   pointAdjustOverlay.classList.toggle('minimized', pointPanelMinimized);
   pointAdjustToggle.textContent = pointPanelMinimized ? '+' : '–';
   framePointButtons.innerHTML = '';
+
   const count = frameCanvases.length || getFrameCount();
+
   for(let i=0;i<count;i++){
     const btn=document.createElement('button');
     btn.type='button';
     btn.textContent='Frame '+(i+1);
     btn.className=i===selectedPointFrame?'active':'';
     btn.disabled=!frameCanvases.length;
-    btn.addEventListener('click',()=>{selectedPointFrame=i;renderThumbs();updatePointAdjustPanel();drawPreviewFrame(lastPreviewTimestamp);setStatus('Frame '+(i+1)+' selecionado para ajuste fino do ponto.')});
+
+    btn.addEventListener('click',()=>{
+      selectedPointFrame=i;
+      renderThumbs();
+      updatePointAdjustPanel();
+      drawPreviewFrame(lastPreviewTimestamp);
+      setStatus('Frame '+(i+1)+' selecionado para ajuste fino do ponto.');
+    });
+
     framePointButtons.appendChild(btn);
   }
 }
-pointAdjustHead.addEventListener('click',(e)=>{if(e.target.closest('button')&&e.target!==pointAdjustToggle)return;pointPanelMinimized=!pointPanelMinimized;updatePointAdjustPanel()});
-pointAdjustToggle.addEventListener('click',(e)=>{e.stopPropagation();pointPanelMinimized=!pointPanelMinimized;updatePointAdjustPanel()});
-document.querySelectorAll('[data-nudge]').forEach(btn=>btn.addEventListener('click',()=>{
-  if(!frameCanvases.length||!keypoint)return;
-  if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>keypoint?({...keypoint}):null);
-  const [dx,dy]=btn.dataset.nudge.split(',').map(Number);
-  const step=2;
-  const current=perspectivePoints[selectedPointFrame]||keypoint;
-  perspectivePoints[selectedPointFrame]={x:clamp(current.x+dx*step,0,frameCanvases[selectedPointFrame].width),y:clamp(current.y+dy*step,0,frameCanvases[selectedPointFrame].height)};
-  if(selectedPointFrame===0)keypoint={...perspectivePoints[0]};
-  if(alignmentApplied)rebuildAlignedFrames();
-  renderThumbs();
+
+function setupPointAdjustPanel(){
+  if(!pointAdjustHead || !pointAdjustToggle) return;
+
+  pointAdjustHead.addEventListener('click',(e)=>{
+    if(e.target.closest('button') && e.target!==pointAdjustToggle) return;
+    pointPanelMinimized=!pointPanelMinimized;
+    updatePointAdjustPanel();
+  });
+
+  pointAdjustToggle.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    pointPanelMinimized=!pointPanelMinimized;
+    updatePointAdjustPanel();
+  });
+
+  document.querySelectorAll('[data-nudge]').forEach(btn=>btn.addEventListener('click',()=>{
+    if(!frameCanvases.length||!keypoint)return;
+
+    if(!perspectivePoints.length){
+      perspectivePoints=frameCanvases.map(()=>keypoint?({...keypoint}):null);
+    }
+
+    const [dx,dy]=btn.dataset.nudge.split(',').map(Number);
+    const step=2;
+    const current=perspectivePoints[selectedPointFrame]||keypoint;
+
+    perspectivePoints[selectedPointFrame]={
+      x:clamp(current.x+dx*step,0,frameCanvases[selectedPointFrame].width),
+      y:clamp(current.y+dy*step,0,frameCanvases[selectedPointFrame].height)
+    };
+
+    if(selectedPointFrame===0)keypoint={...perspectivePoints[0]};
+
+    buildTrackingTemplates();
+
+    if(alignmentApplied)rebuildAlignedFrames();
+
+    renderThumbs();
+    updatePointAdjustPanel();
+    drawPreviewFrame(lastPreviewTimestamp);
+    setStatus('Ajuste fino aplicado no Frame '+(selectedPointFrame+1)+'.');
+  }));
+
   updatePointAdjustPanel();
-  drawPreviewFrame(lastPreviewTimestamp);
-  setStatus('Ajuste fino aplicado no Frame '+(selectedPointFrame+1)+'.');
+}
+
+[wiggleSpeedInput,effectIntensityInput,exposureAdjustInput,sharpnessAdjustInput,glowAdjustInput,rgbAdjustInput].forEach(i=>i.addEventListener('input',()=>{
+  updateRangeLabels();
+  rebuildAlignedFrames();
+  drawPreviewFrame(performance.now());
 }));
-updatePointAdjustPanel();rebuildAlignedFrames();drawPreviewFrame(performance.now())}));
-[effectSelect,outputRatioSelect,outputQualitySelect,motionStyleSelect].forEach(i=>i.addEventListener('change',()=>{rebuildAlignedFrames();drawPreviewFrame(performance.now())}));updateRangeLabels();
+
+[effectSelect,outputRatioSelect,outputQualitySelect,motionStyleSelect].forEach(i=>i.addEventListener('change',()=>{
+  rebuildAlignedFrames();
+  drawPreviewFrame(performance.now());
+}));
+
+updateRangeLabels();
+setupPointAdjustPanel();
 dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('drag')});dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('drag'));dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('drag');const f=e.dataTransfer.files?.[0];if(f)loadVideoFile(f)});videoInput.addEventListener('change',()=>{const f=videoInput.files?.[0];if(f)loadVideoFile(f)});
 function loadVideoFile(file){
   if(!file){setStatus('Nenhum arquivo selecionado.');return}
