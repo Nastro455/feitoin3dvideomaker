@@ -44,3 +44,16 @@ Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5
 - Adicionado painel flutuante minimizado no preview para ajuste fino dos pontos.
 - O painel permite escolher Frame 1, 2, 3 ou 4 e mover o ponto com setas.
 - Ao abrir o painel, o ponto selecionado também aparece sobre o preview para conferência.
+
+
+## Correção — Upload de vídeo
+
+- O carregamento agora registra os eventos de leitura antes de definir o arquivo de vídeo.
+- Adicionado aviso de erro quando o navegador não consegue ler o formato/codec do vídeo.
+
+## Atualização — Rastreamento de ponto no vídeo
+
+- Adicionada opção **Rastrear ponto durante a exportação**.
+- A ferramenta cria um pequeno template do ponto marcado e tenta acompanhá-lo em cada perspectiva ao longo do vídeo.
+- Isso melhora a estabilização do efeito 3D quando existe movimento de câmera ou do objeto.
+- Ainda é um tracking experimental: funciona melhor com pontos de alto contraste, bem iluminados e vídeos curtos.
