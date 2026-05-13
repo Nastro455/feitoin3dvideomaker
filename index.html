@@ -27,13 +27,13 @@
 <div class="actions"><button id="loadFrameBtn" type="button" disabled>2. Gerar preview do vídeo</button></div>
 </div></details>
 <details class="card" open><summary>2. Alinhamento e enquadramento</summary><div class="details-body">
-<p class="mini-note">Defina o ponto âncora no objeto principal. A ferramenta mantém esse ponto fixo entre as perspectivas, fazendo o fundo se movimentar.</p>
-<div class="actions"><button id="selectPointBtn" type="button" disabled>3. Marcar ponto âncora</button><button id="applyPointBtn" type="button" disabled>4. Aplicar alinhamento</button><button class="secondary" id="clearPointBtn" type="button" disabled>Limpar alinhamento</button></div>
-<div class="field"><label>Enquadramento manual</label><p class="mini-note">Depois de aplicar os pontos: no desktop, arraste o preview e use o scroll. No mobile, use 1 dedo para mover e 2 dedos para zoom.</p></div><div class="field"><p class="mini-note"><strong>Nova lógica:</strong> o ponto marcado é o ponto âncora. O objetivo não é mexer tudo, e sim manter o objeto principal parado enquanto o fundo muda entre as perspectivas.</p></div>
+<p class="mini-note">A nova lógica usa sempre a imagem 2 como base principal. As outras perspectivas entram apenas nas bordas para criar profundidade sem fazer o objeto principal “sambar”.</p>
+<div class="actions"><button id="selectPointBtn" type="button" disabled>3. Marcar referência</button><button id="applyPointBtn" type="button" disabled>4. Aplicar alinhamento</button><button class="secondary" id="clearPointBtn" type="button" disabled>Limpar alinhamento</button></div>
+<div class="field"><label>Enquadramento manual</label><p class="mini-note">Depois de aplicar os pontos: no desktop, arraste o preview e use o scroll. No mobile, use 1 dedo para mover e 2 dedos para zoom.</p></div><div class="field"><p class="mini-note"><strong>Nova lógica:</strong> a perspectiva 2 vira a imagem principal. O centro fica fiel e o efeito 3D acontece nas bordas.</p></div>
 </div></details>
 <details class="card" open><summary>3. Movimento 3D e exportação</summary><div class="details-body">
 <div class="field"><label for="wiggleSpeed">Velocidade do efeito 3D</label><div class="range-row"><input id="wiggleSpeed" type="range" min="1" max="12" step="1" value="5" /><output id="wiggleSpeedValue">5</output></div></div>
-<div class="field"><label for="motionStyle">Estilo do movimento</label><select id="motionStyle"><option value="boomerang" selected>Vai e volta — 1, 2, 3, 2</option><option value="loop">Loop contínuo — 1, 2, 3, 1</option></select></div><div class="field"><label class="check-row" for="anchorLockToggle"><input id="anchorLockToggle" type="checkbox" checked><span><strong>Travar objeto principal</strong><span>Mantém o ponto âncora fixo entre as perspectivas. O assunto fica fiel e o fundo gera o movimento 3D.</span></span></label></div>
+<div class="field"><label for="motionStyle">Estilo do movimento</label><select id="motionStyle"><option value="boomerang" selected>Vai e volta — 1, 2, 3, 2</option><option value="loop">Loop contínuo — 1, 2, 3, 1</option></select></div><div class="field"><label class="check-row" for="anchorLockToggle"><input id="anchorLockToggle" type="checkbox" checked><span><strong>Imagem 2 fixa + bordas em movimento</strong><span>Usa a perspectiva 2 como imagem principal e movimenta apenas as bordas com as outras perspectivas.</span></span></label></div><div class="field"><label for="edgeMotionIntensity">Intensidade das bordas 3D</label><div class="range-row"><input id="edgeMotionIntensity" type="range" min="0" max="100" step="5" value="70" /><output id="edgeMotionIntensityValue">70%</output></div><p class="mini-note">Quanto maior, mais as laterais/fundo se movimentam. O centro continua baseado na imagem 2.</p></div>
 <div class="field"><label class="check-row" for="trackPointToggle"><input id="trackPointToggle" type="checkbox"><span><strong>Tracking dinâmico experimental</strong><span>Use só quando o assunto muda muito de posição. Pode pesar mais e gerar instabilidade em objetos reflexivos.</span></span></label></div>
 <div class="field"><label for="outputRatio">Formato final</label><select id="outputRatio"><option value="source" selected>Mesmo formato do recorte</option><option value="vertical">Vertical 9:16</option><option value="square">Quadrado 1:1</option><option value="horizontal">Horizontal 16:9</option><option value="fourthree">Clássico 4:3</option></select></div>
 <div class="field"><label for="outputQuality">Qualidade</label><select id="outputQuality"><option value="preview">Leve — 720p</option><option value="standard" selected>Padrão — até 1080p</option><option value="high">Alta — até 1440p</option></select></div>
@@ -73,7 +73,7 @@
 <script>
 const $=s=>document.querySelector(s);
 const videoInput=$('#videoInput'),dropzone=$('#dropzone'),layoutSelect=$('#layoutSelect'),frameCountSelect=$('#frameCount'),maxDurationSelect=$('#maxDuration'),loadFrameBtn=$('#loadFrameBtn'),selectPointBtn=$('#selectPointBtn'),applyPointBtn=$('#applyPointBtn'),clearPointBtn=$('#clearPointBtn'),exportBtn=$('#exportBtn'),downloadLink=$('#downloadLink'),sourceVideo=$('#sourceVideo'),canvas=$('#previewCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),statusEl=$('#status'),thumbsEl=$('#thumbs'),previewPlayPauseBtn=$('#previewPlayPauseBtn'),pointAdjustOverlay=$('#pointAdjustOverlay'),pointAdjustHead=$('#pointAdjustHead'),pointAdjustToggle=$('#pointAdjustToggle'),framePointButtons=$('#framePointButtons');
-const wiggleSpeedInput=$('#wiggleSpeed'),wiggleSpeedValue=$('#wiggleSpeedValue'),motionStyleSelect=$('#motionStyle'),outputRatioSelect=$('#outputRatio'),outputQualitySelect=$('#outputQuality'),exportFormatSelect=$('#exportFormat'),anchorLockToggle=$('#anchorLockToggle'),trackPointToggle=$('#trackPointToggle'),effectSelect=$('#effectSelect'),effectIntensityInput=$('#effectIntensity'),effectIntensityValue=$('#effectIntensityValue'),exposureAdjustInput=$('#exposureAdjust'),exposureAdjustValue=$('#exposureAdjustValue'),sharpnessAdjustInput=$('#sharpnessAdjust'),sharpnessAdjustValue=$('#sharpnessAdjustValue'),glowAdjustInput=$('#glowAdjust'),glowAdjustValue=$('#glowAdjustValue'),rgbAdjustInput=$('#rgbAdjust'),rgbAdjustValue=$('#rgbAdjustValue'),progressOverlay=$('#progressOverlay'),progressRing=$('#progressRing'),progressText=$('#progressText'),progressTitle=$('#progressTitle'),progressNote=$('#progressNote');
+const wiggleSpeedInput=$('#wiggleSpeed'),wiggleSpeedValue=$('#wiggleSpeedValue'),motionStyleSelect=$('#motionStyle'),outputRatioSelect=$('#outputRatio'),outputQualitySelect=$('#outputQuality'),exportFormatSelect=$('#exportFormat'),anchorLockToggle=$('#anchorLockToggle'),edgeMotionIntensity=$('#edgeMotionIntensity'),edgeMotionIntensityValue=$('#edgeMotionIntensityValue'),trackPointToggle=$('#trackPointToggle'),effectSelect=$('#effectSelect'),effectIntensityInput=$('#effectIntensity'),effectIntensityValue=$('#effectIntensityValue'),exposureAdjustInput=$('#exposureAdjust'),exposureAdjustValue=$('#exposureAdjustValue'),sharpnessAdjustInput=$('#sharpnessAdjust'),sharpnessAdjustValue=$('#sharpnessAdjustValue'),glowAdjustInput=$('#glowAdjust'),glowAdjustValue=$('#glowAdjustValue'),rgbAdjustInput=$('#rgbAdjust'),rgbAdjustValue=$('#rgbAdjustValue'),progressOverlay=$('#progressOverlay'),progressRing=$('#progressRing'),progressText=$('#progressText'),progressTitle=$('#progressTitle'),progressNote=$('#progressNote');
 let videoUrl=null,frameCanvases=[],alignedFrames=[],keypoint=null,perspectivePoints=[],selectedPointFrame=0,pointPanelMinimized=true,selectingPoint=false,alignmentApplied=false,animationId=null,lastPreviewTimestamp=0,previewPlaying=true,pausedPreviewTimestamp=0,manualOffsetX=0,manualOffsetY=0,manualZoom=1,isDragging=false,dragStartX=0,dragStartY=0,dragStartOffsetX=0,dragStartOffsetY=0,mediaRecorder=null,recordedChunks=[],isExporting=false,trackingTemplates=[],anchorOffsets=[],renderAnchorPoint=null,activeAlignmentPoints=null,activeAnchorOffsets=null,activeRenderAnchorPoint=null;
 const setStatus=m=>statusEl.textContent=m, clamp=(v,min,max)=>Math.max(min,Math.min(max,v)), getFrameCount=()=>Number(frameCountSelect.value), getLayout=()=>layoutSelect.value;
 function updateRangeLabels(){
@@ -83,7 +83,7 @@ function updateRangeLabels(){
   exposureAdjustValue.textContent=e>0?'+'+e:String(e);
   sharpnessAdjustValue.textContent=sharpnessAdjustInput.value+'%';
   glowAdjustValue.textContent=glowAdjustInput.value+'%';
-  rgbAdjustValue.textContent=rgbAdjustInput.value+'px';
+  rgbAdjustValue.textContent=rgbAdjustInput.value+'px';if(edgeMotionIntensityValue)edgeMotionIntensityValue.textContent=edgeMotionIntensity.value+'%';
 }
 
 function updatePointAdjustPanel(){
@@ -160,7 +160,7 @@ function setupPointAdjustPanel(){
   updatePointAdjustPanel();
 }
 
-[wiggleSpeedInput,effectIntensityInput,exposureAdjustInput,sharpnessAdjustInput,glowAdjustInput,rgbAdjustInput].forEach(i=>i.addEventListener('input',()=>{
+[wiggleSpeedInput,effectIntensityInput,exposureAdjustInput,sharpnessAdjustInput,glowAdjustInput,rgbAdjustInput,edgeMotionIntensity].forEach(i=>i.addEventListener('input',()=>{
   updateRangeLabels();
   rebuildAlignedFrames();
   drawPreviewFrame(performance.now());
@@ -213,21 +213,99 @@ function splitFrameCanvas(source){const count=getFrameCount(),layout=getLayout()
 function getOutputSize(sw,sh){let max=1080;if(outputQualitySelect.value==='preview')max=720;if(outputQualitySelect.value==='high')max=1440;let aspect=sw/sh;if(outputRatioSelect.value==='vertical')aspect=9/16;if(outputRatioSelect.value==='square')aspect=1;if(outputRatioSelect.value==='horizontal')aspect=16/9;if(outputRatioSelect.value==='fourthree')aspect=4/3;let w,h;if(aspect>=1){w=max;h=Math.round(max/aspect)}else{h=max;w=Math.round(max*aspect)}w+=w%2;h+=h%2;return{width:w,height:h,aspect}}
 function cropRectToAspect(w,h,aspect){const a=w/h;let cw=w,ch=h;if(a>aspect)cw=h*aspect;else ch=w/aspect;return{x:(w-cw)/2,y:(h-ch)/2,width:cw,height:ch}}
 function applyManualFraming(rect,bw,bh){const z=clamp(manualZoom,1,4),w=rect.width/z,h=rect.height/z,cx=rect.x+rect.width/2+manualOffsetX,cy=rect.y+rect.height/2+manualOffsetY;return{x:clamp(cx-w/2,0,bw-w),y:clamp(cy-h/2,0,bh-h),width:w,height:h}}
-function rebuildAlignedFrames(sourceFrames=frameCanvases){if(!sourceFrames.length)return;const bw=sourceFrames[0].width,bh=sourceFrames[0].height,{width,height,aspect}=getOutputSize(bw,bh);canvas.width=width;canvas.height=height;const baseRect=cropRectToAspect(bw,bh,aspect),crop=applyManualFraming(baseRect,bw,bh);alignedFrames=sourceFrames.map((frame,frameIndex)=>{const out=document.createElement('canvas');out.width=width;out.height=height;const c=out.getContext('2d',{willReadFrequently:true});c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';let ox=0,oy=0;
-if(alignmentApplied && anchorLockToggle.checked){
-  const renderAnchor = getRenderAnchorPoint();
-  const points = activeAlignmentPoints || perspectivePoints;
-  const point = points[frameIndex] || keypoint;
-  if(renderAnchor && point){
-    ox = renderAnchor.x - point.x;
-    oy = renderAnchor.y - point.y;
+function rebuildAlignedFrames(sourceFrames=frameCanvases){
+  if(!sourceFrames.length)return;
+
+  const bw=sourceFrames[0].width,bh=sourceFrames[0].height,{width,height,aspect}=getOutputSize(bw,bh);
+  canvas.width=width;
+  canvas.height=height;
+
+  const baseRect=cropRectToAspect(bw,bh,aspect);
+  const crop=applyManualFraming(baseRect,bw,bh);
+
+  const processedFrames=sourceFrames.map((frame,frameIndex)=>{
+    const out=document.createElement('canvas');
+    out.width=width;
+    out.height=height;
+    const c=out.getContext('2d',{willReadFrequently:true});
+    c.imageSmoothingEnabled=true;
+    c.imageSmoothingQuality='high';
+
+    let ox=0,oy=0;
+
+    // O tracking/ancoragem continua existindo como referência técnica,
+    // mas no modo principal a perspectiva 2 será a base visual.
+    if(alignmentApplied && !anchorLockToggle.checked && (activeAlignmentPoints||perspectivePoints).length){
+      const points=activeAlignmentPoints||perspectivePoints;
+      const anchor=points[0]||keypoint;
+      const point=points[frameIndex]||keypoint;
+      if(anchor&&point){ox=anchor.x-point.x;oy=anchor.y-point.y}
+    }
+
+    c.drawImage(frame,crop.x-ox,crop.y-oy,crop.width,crop.height,0,0,width,height);
+    applyCreativeEffects(out);
+    return out;
+  });
+
+  if(anchorLockToggle.checked && processedFrames.length>=2){
+    const mainIndex=1; // imagem 2 é sempre a principal
+    const mainFrame=processedFrames[mainIndex]||processedFrames[0];
+    alignedFrames=processedFrames.map((movingFrame,idx)=>{
+      if(idx===mainIndex)return mainFrame;
+      return composeMainFrameWithMovingEdges(mainFrame,movingFrame);
+    });
+  } else {
+    alignedFrames=processedFrames;
   }
-} else if(alignmentApplied&&(activeAlignmentPoints||perspectivePoints).length){
-  const points=activeAlignmentPoints||perspectivePoints;
-  const anchor=points[0]||keypoint;
-  const point=points[frameIndex]||keypoint;
-  if(anchor&&point){ox=anchor.x-point.x;oy=anchor.y-point.y}
-}c.drawImage(frame,crop.x-ox,crop.y-oy,crop.width,crop.height,0,0,width,height);applyCreativeEffects(out);return out})}
+}
+
+function composeMainFrameWithMovingEdges(mainFrame,movingFrame){
+  const w=mainFrame.width,h=mainFrame.height;
+  const out=document.createElement('canvas');
+  out.width=w;
+  out.height=h;
+  const c=out.getContext('2d',{willReadFrequently:true});
+  c.drawImage(mainFrame,0,0);
+
+  const intensity=Number(edgeMotionIntensity?.value||70)/100;
+  if(intensity<=0)return out;
+
+  const base=c.getImageData(0,0,w,h);
+  const b=base.data;
+
+  const mCanvas=document.createElement('canvas');
+  mCanvas.width=w;
+  mCanvas.height=h;
+  mCanvas.getContext('2d').drawImage(movingFrame,0,0);
+  const m=mCanvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+
+  const cx=w/2,cy=h/2;
+  const inner=.36;   // área central preservada 100% da imagem 2
+  const outer=.92;   // borda com movimento máximo
+
+  for(let y=0;y<h;y++){
+    const ny=Math.abs(y-cy)/(h/2);
+    for(let x=0;x<w;x++){
+      const nx=Math.abs(x-cx)/(w/2);
+      const edge=Math.max(nx,ny);
+      let a=(edge-inner)/(outer-inner);
+      a=clamp(a,0,1);
+      a=a*a*(3-2*a); // smoothstep
+      a*=intensity;
+
+      if(a<=0)continue;
+
+      const i=(y*w+x)*4;
+      b[i]=Math.round(b[i]*(1-a)+m[i]*a);
+      b[i+1]=Math.round(b[i+1]*(1-a)+m[i+1]*a);
+      b[i+2]=Math.round(b[i+2]*(1-a)+m[i+2]*a);
+    }
+  }
+
+  c.putImageData(base,0,0);
+  return out;
+}
+
 function getSequence(){const count=getFrameCount(),base=Array.from({length:count},(_,i)=>i);if(motionStyleSelect.value==='boomerang'&&count>2)return[...base,...base.slice(1,-1).reverse()];return base}
 function getCurrentPerspectiveIndex(ms){const seq=getSequence(),step=1000/Number(wiggleSpeedInput.value);return seq[Math.floor(ms/step)%seq.length]}
 function drawPreviewFrame(ts){if(!alignedFrames.length){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#020914';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#9fb6cf';ctx.font='24px sans-serif';ctx.textAlign='center';ctx.fillText('Carregue um vídeo para começar',canvas.width/2,canvas.height/2);return}const safeTs=previewPlaying?ts:pausedPreviewTimestamp;const f=alignedFrames[getCurrentPerspectiveIndex(safeTs)]||alignedFrames[0];ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(f,0,0);if(!pointPanelMinimized&&perspectivePoints[selectedPointFrame]){const p=perspectivePoints[selectedPointFrame];ctx.save();ctx.fillStyle='#4fff8a';ctx.strokeStyle='#061426';ctx.lineWidth=4;const x=p.x/frameCanvases[selectedPointFrame].width*canvas.width;const y=p.y/frameCanvases[selectedPointFrame].height*canvas.height;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-18,y);ctx.lineTo(x+18,y);ctx.moveTo(x,y-18);ctx.lineTo(x,y+18);ctx.stroke();ctx.restore()}}
@@ -235,7 +313,7 @@ function startPreviewLoop(){cancelAnimationFrame(animationId);const tick=ts=>{if
 previewPlayPauseBtn.addEventListener('click',()=>{if(!alignedFrames.length)return;previewPlaying=!previewPlaying;if(!previewPlaying)pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent=previewPlaying?'⏸ Pausar preview':'▶️ Dar play no preview';setStatus(previewPlaying?'Preview em reprodução.':'Preview pausado. Você pode marcar o ponto com mais precisão.');drawPreviewFrame(lastPreviewTimestamp)});
 selectPointBtn.addEventListener('click',()=>{if(!frameCanvases.length)return;previewPlaying=false;pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent='▶️ Dar play no preview';selectingPoint=true;canvas.classList.add('point-mode');drawPreviewFrame(lastPreviewTimestamp);setStatus('Preview pausado. Clique no ponto principal do objeto com precisão.')});
 canvas.addEventListener('click',e=>{if(!selectingPoint||!frameCanvases.length)return;const r=canvas.getBoundingClientRect();keypoint={x:(e.clientX-r.left)/r.width*frameCanvases[0].width,y:(e.clientY-r.top)/r.height*frameCanvases[0].height};perspectivePoints=frameCanvases.map(()=>({...keypoint}));selectedPointFrame=0;selectingPoint=false;canvas.classList.remove('point-mode');applyPointBtn.disabled=false;clearPointBtn.disabled=false;computeAnchorOffsets();buildTrackingTemplates();setStatus('Ponto âncora registrado em todos os quadros. Agora você pode corrigir o ponto de cada perspectiva clicando nos quadros abaixo.');renderThumbs()});
-applyPointBtn.addEventListener('click',()=>{if(!keypoint)return;if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>({...keypoint}));computeAnchorOffsets();buildTrackingTemplates();alignmentApplied=true;manualOffsetX=manualOffsetY=0;manualZoom=1;rebuildAlignedFrames();startPreviewLoop();exportBtn.disabled=false;canvas.classList.add('frame-mode');setStatus('Objeto principal travado. Agora o ponto âncora deve permanecer na mesma posição da tela; quem deve respirar é o fundo.')});
+applyPointBtn.addEventListener('click',()=>{if(!keypoint)return;if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>({...keypoint}));computeAnchorOffsets();buildTrackingTemplates();alignmentApplied=true;manualOffsetX=manualOffsetY=0;manualZoom=1;rebuildAlignedFrames();startPreviewLoop();exportBtn.disabled=false;canvas.classList.add('frame-mode');setStatus('Imagem 2 definida como base principal. O centro deve ficar fiel, e as bordas/fundo devem criar o movimento 3D.')});
 clearPointBtn.addEventListener('click',()=>{keypoint=null;perspectivePoints=[];selectedPointFrame=0;trackingTemplates=[];activeAlignmentPoints=null;alignmentApplied=false;manualOffsetX=manualOffsetY=0;manualZoom=1;canvas.classList.remove('frame-mode');applyPointBtn.disabled=true;clearPointBtn.disabled=true;rebuildAlignedFrames();renderThumbs();setStatus('Alinhamento limpo.')});
 function canManualFrame(){return frameCanvases.length&&!selectingPoint&&alignmentApplied}
 canvas.addEventListener('mousedown',e=>{if(!canManualFrame()||e.button!==0)return;isDragging=true;canvas.classList.add('frame-drag');dragStartX=e.clientX;dragStartY=e.clientY;dragStartOffsetX=manualOffsetX;dragStartOffsetY=manualOffsetY;e.preventDefault()});
@@ -395,7 +473,7 @@ function trackSinglePoint(frame,template,prev,searchRadius){
   return {x:best.x,y:best.y,score:best.score,confidence};
 }
 
-exportBtn.addEventListener('click',async()=>{if(!sourceVideo.src||isExporting)return;isExporting=true;exportBtn.disabled=true;downloadLink.classList.remove('show');showProgress(0,'Preparando exportação...');const durationLimit=maxDurationSelect.value==='full'?sourceVideo.duration:Math.min(Number(maxDurationSelect.value),sourceVideo.duration||Number(maxDurationSelect.value));const refW=frameCanvases[0]?.width||sourceVideo.videoWidth/getFrameCount(),refH=frameCanvases[0]?.height||sourceVideo.videoHeight,{width,height}=getOutputSize(refW,refH),exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;const exportCtx=exportCanvas.getContext('2d'),stream=exportCanvas.captureStream(30),mime=getRecorderMimeType();if(!mime){hideProgress();isExporting=false;exportBtn.disabled=false;setStatus('Este navegador não suporta gravação via MediaRecorder.');return}recordedChunks=[];mediaRecorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:outputQualitySelect.value==='high'?9000000:outputQualitySelect.value==='preview'?3500000:6000000});mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data)};mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:mime}),url=URL.createObjectURL(blob),ext=mime.includes('mp4')?'mp4':'webm';downloadLink.href=url;downloadLink.download='feitoin3d-video-maker.'+ext;downloadLink.textContent='Baixar vídeo '+ext.toUpperCase();downloadLink.classList.add('show');setStatus('Exportação finalizada.');hideProgress();isExporting=false;exportBtn.disabled=false};computeAnchorOffsets();let trackedPoints=perspectivePoints.map(p=>p?({...p}):p);if(trackPointToggle.checked&&keypoint)buildTrackingTemplates();await seekVideo(0);sourceVideo.muted=true;mediaRecorder.start(250);await sourceVideo.play();const start=performance.now();const drawExport=()=>{if(!isExporting)return;const current=sourceVideo.currentTime,progress=clamp(current/durationLimit,0,1);showProgress(progress,trackPointToggle.checked?'Rastreando ponto âncora e exportando...':anchorLockToggle.checked?'Travando assunto e exportando vídeo 3D...':'Exportando vídeo 3D...');const currentFrame=document.createElement('canvas');currentFrame.width=sourceVideo.videoWidth;currentFrame.height=sourceVideo.videoHeight;currentFrame.getContext('2d').drawImage(sourceVideo,0,0,currentFrame.width,currentFrame.height);const split=splitFrameCanvas(currentFrame);
+exportBtn.addEventListener('click',async()=>{if(!sourceVideo.src||isExporting)return;isExporting=true;exportBtn.disabled=true;downloadLink.classList.remove('show');showProgress(0,'Preparando exportação...');const durationLimit=maxDurationSelect.value==='full'?sourceVideo.duration:Math.min(Number(maxDurationSelect.value),sourceVideo.duration||Number(maxDurationSelect.value));const refW=frameCanvases[0]?.width||sourceVideo.videoWidth/getFrameCount(),refH=frameCanvases[0]?.height||sourceVideo.videoHeight,{width,height}=getOutputSize(refW,refH),exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;const exportCtx=exportCanvas.getContext('2d'),stream=exportCanvas.captureStream(30),mime=getRecorderMimeType();if(!mime){hideProgress();isExporting=false;exportBtn.disabled=false;setStatus('Este navegador não suporta gravação via MediaRecorder.');return}recordedChunks=[];mediaRecorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:outputQualitySelect.value==='high'?9000000:outputQualitySelect.value==='preview'?3500000:6000000});mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data)};mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:mime}),url=URL.createObjectURL(blob),ext=mime.includes('mp4')?'mp4':'webm';downloadLink.href=url;downloadLink.download='feitoin3d-video-maker.'+ext;downloadLink.textContent='Baixar vídeo '+ext.toUpperCase();downloadLink.classList.add('show');setStatus('Exportação finalizada.');hideProgress();isExporting=false;exportBtn.disabled=false};computeAnchorOffsets();let trackedPoints=perspectivePoints.map(p=>p?({...p}):p);if(trackPointToggle.checked&&keypoint)buildTrackingTemplates();await seekVideo(0);sourceVideo.muted=true;mediaRecorder.start(250);await sourceVideo.play();const start=performance.now();const drawExport=()=>{if(!isExporting)return;const current=sourceVideo.currentTime,progress=clamp(current/durationLimit,0,1);showProgress(progress,trackPointToggle.checked?'Rastreando ponto âncora e exportando...':anchorLockToggle.checked?'Mantendo imagem 2 fixa e exportando bordas 3D...':'Exportando vídeo 3D...');const currentFrame=document.createElement('canvas');currentFrame.width=sourceVideo.videoWidth;currentFrame.height=sourceVideo.videoHeight;currentFrame.getContext('2d').drawImage(sourceVideo,0,0,currentFrame.width,currentFrame.height);const split=splitFrameCanvas(currentFrame);
 if(trackPointToggle.checked&&keypoint&&trackingTemplates.length){
   trackedPoints=trackFramePoints(split,trackedPoints);
   activeAlignmentPoints=trackedPoints;

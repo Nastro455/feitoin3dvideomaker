@@ -102,3 +102,16 @@ Para melhores resultados:
 - corrija esse ponto em todas as perspectivas;
 - ative “Travar objeto principal”;
 - ative o tracking experimental apenas se o assunto realmente se mover ao longo do vídeo.
+
+
+## Redesign — Imagem 2 fixa + bordas em movimento
+
+A lógica foi redesenhada novamente:
+
+- A **perspectiva 2** é sempre a imagem principal.
+- A imagem 2 preenche o centro e mantém o assunto fiel.
+- As outras perspectivas entram apenas nas bordas.
+- O movimento 3D acontece nas laterais/fundo, evitando o efeito de “sambar”.
+- Foi adicionado controle de intensidade das bordas 3D.
+
+Essa lógica é mais próxima do resultado desejado: assunto estável e fundo com paralaxe.
