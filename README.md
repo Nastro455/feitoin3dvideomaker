@@ -24,3 +24,9 @@ Ferramenta experimental dedicada para montagem de vídeos 3D gravados com a lent
 ## Observações
 
 Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5 a 10 segundos.
+
+
+## Atualização — Play/Pause no preview
+
+- Adicionado botão de play/pause no preview.
+- Ao clicar em selecionar ponto de referência, o preview pausa automaticamente para marcação mais precisa.
