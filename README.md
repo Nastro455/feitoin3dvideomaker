@@ -30,3 +30,10 @@ Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5
 
 - Adicionado botão de play/pause no preview.
 - Ao clicar em selecionar ponto de referência, o preview pausa automaticamente para marcação mais precisa.
+
+
+## Atualização — Correção de pontos por quadro
+
+- Cada perspectiva agora exibe o ponto marcado no thumbnail.
+- O usuário pode clicar em qualquer quadro para corrigir/definir a posição do ponto naquela perspectiva.
+- O quadro selecionado fica destacado e o alinhamento é recalculado quando necessário.
