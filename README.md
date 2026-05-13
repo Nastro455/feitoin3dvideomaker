@@ -37,3 +37,10 @@ Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5
 - Cada perspectiva agora exibe o ponto marcado no thumbnail.
 - O usuário pode clicar em qualquer quadro para corrigir/definir a posição do ponto naquela perspectiva.
 - O quadro selecionado fica destacado e o alinhamento é recalculado quando necessário.
+
+
+## Atualização — Painel minimizado de ajuste fino no preview
+
+- Adicionado painel flutuante minimizado no preview para ajuste fino dos pontos.
+- O painel permite escolher Frame 1, 2, 3 ou 4 e mover o ponto com setas.
+- Ao abrir o painel, o ponto selecionado também aparece sobre o preview para conferência.
