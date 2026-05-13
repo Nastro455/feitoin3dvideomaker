@@ -69,3 +69,20 @@ Corrigido um conflito em que as funções do painel de ajuste de pontos ficavam 
 - A busca do ponto acontece em múltiplas etapas: ampla, média e ajuste fino.
 - O template do ponto é atualizado dinamicamente durante a exportação, para acompanhar mudanças de luz e movimento.
 - Foi adicionada suavização para reduzir tremidas entre frames.
+
+## Redesign de lógica — Travar objeto principal
+
+Esta versão muda a lógica central da ferramenta:
+
+- O ponto marcado passa a ser tratado como **ponto âncora**.
+- A ferramenta calcula offsets fixos entre as perspectivas.
+- Durante a alternância, o objeto principal permanece travado.
+- O fundo se desloca entre as perspectivas, criando o efeito 3D mais satisfatório.
+- O tracking dinâmico ficou opcional e experimental, para casos em que o assunto muda muito de posição.
+
+Fluxo ideal:
+1. Pausar no melhor frame.
+2. Marcar o ponto âncora no objeto principal.
+3. Corrigir o ponto em cada perspectiva.
+4. Aplicar alinhamento.
+5. Exportar com “Travar objeto principal” ativado.
