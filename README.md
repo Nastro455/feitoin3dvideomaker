@@ -115,3 +115,11 @@ A lógica foi redesenhada novamente:
 - Foi adicionado controle de intensidade das bordas 3D.
 
 Essa lógica é mais próxima do resultado desejado: assunto estável e fundo com paralaxe.
+
+
+## Atualização — Match automático entre perspectivas
+
+- Ao marcar o ponto no preview, a ferramenta interpreta o clique como ponto da **perspectiva 2**, que é a imagem principal.
+- A ferramenta tenta encontrar automaticamente o mesmo ponto nas outras perspectivas.
+- Os thumbnails mostram o ponto encontrado em cada quadro.
+- O usuário ainda pode corrigir manualmente pelo painel minimizado ou clicando nos thumbnails.

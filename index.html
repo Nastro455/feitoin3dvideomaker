@@ -208,7 +208,7 @@ function loadVideoFile(file){
 }
 function seekVideo(time){return new Promise(resolve=>{const on=()=>{sourceVideo.removeEventListener('seeked',on);resolve()};sourceVideo.addEventListener('seeked',on);sourceVideo.currentTime=Math.min(Math.max(time,0),sourceVideo.duration||0)})}
 loadFrameBtn.addEventListener('click',async()=>{if(!sourceVideo.src)return;await seekVideo(0);captureReferenceFrame();rebuildAlignedFrames();renderThumbs();previewPlaying=true;previewPlayPauseBtn.disabled=false;previewPlayPauseBtn.textContent='⏸ Pausar preview';startPreviewLoop();selectPointBtn.disabled=false;exportBtn.disabled=false;setStatus('Preview gerado. Use play/pause no preview ou selecione um ponto de referência para alinhar melhor o vídeo.')});
-function captureReferenceFrame(){const w=sourceVideo.videoWidth,h=sourceVideo.videoHeight;base=document.createElement('canvas');base.width=w;base.height=h;base.getContext('2d').drawImage(sourceVideo,0,0,w,h);frameCanvases=splitFrameCanvas(base);perspectivePoints=Array.from({length:frameCanvases.length},()=>null);selectedPointFrame=0;updatePointAdjustPanel()}
+function captureReferenceFrame(){const w=sourceVideo.videoWidth,h=sourceVideo.videoHeight;base=document.createElement('canvas');base.width=w;base.height=h;base.getContext('2d').drawImage(sourceVideo,0,0,w,h);frameCanvases=splitFrameCanvas(base);perspectivePoints=Array.from({length:frameCanvases.length},()=>null);selectedPointFrame=Math.min(1,frameCanvases.length-1);updatePointAdjustPanel()}
 function splitFrameCanvas(source){const count=getFrameCount(),layout=getLayout(),frames=[],fw=layout==='horizontal'?source.width/count:source.width,fh=layout==='vertical'?source.height/count:source.height;for(let i=0;i<count;i++){const out=document.createElement('canvas');out.width=Math.round(fw);out.height=Math.round(fh);const c=out.getContext('2d'),sx=layout==='horizontal'?i*fw:0,sy=layout==='vertical'?i*fh:0;c.drawImage(source,sx,sy,fw,fh,0,0,out.width,out.height);frames.push(out)}return frames}
 function getOutputSize(sw,sh){let max=1080;if(outputQualitySelect.value==='preview')max=720;if(outputQualitySelect.value==='high')max=1440;let aspect=sw/sh;if(outputRatioSelect.value==='vertical')aspect=9/16;if(outputRatioSelect.value==='square')aspect=1;if(outputRatioSelect.value==='horizontal')aspect=16/9;if(outputRatioSelect.value==='fourthree')aspect=4/3;let w,h;if(aspect>=1){w=max;h=Math.round(max/aspect)}else{h=max;w=Math.round(max*aspect)}w+=w%2;h+=h%2;return{width:w,height:h,aspect}}
 function cropRectToAspect(w,h,aspect){const a=w/h;let cw=w,ch=h;if(a>aspect)cw=h*aspect;else ch=w/aspect;return{x:(w-cw)/2,y:(h-ch)/2,width:cw,height:ch}}
@@ -311,8 +311,32 @@ function getCurrentPerspectiveIndex(ms){const seq=getSequence(),step=1000/Number
 function drawPreviewFrame(ts){if(!alignedFrames.length){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#020914';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#9fb6cf';ctx.font='24px sans-serif';ctx.textAlign='center';ctx.fillText('Carregue um vídeo para começar',canvas.width/2,canvas.height/2);return}const safeTs=previewPlaying?ts:pausedPreviewTimestamp;const f=alignedFrames[getCurrentPerspectiveIndex(safeTs)]||alignedFrames[0];ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(f,0,0);if(!pointPanelMinimized&&perspectivePoints[selectedPointFrame]){const p=perspectivePoints[selectedPointFrame];ctx.save();ctx.fillStyle='#4fff8a';ctx.strokeStyle='#061426';ctx.lineWidth=4;const x=p.x/frameCanvases[selectedPointFrame].width*canvas.width;const y=p.y/frameCanvases[selectedPointFrame].height*canvas.height;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-18,y);ctx.lineTo(x+18,y);ctx.moveTo(x,y-18);ctx.lineTo(x,y+18);ctx.stroke();ctx.restore()}}
 function startPreviewLoop(){cancelAnimationFrame(animationId);const tick=ts=>{if(previewPlaying){lastPreviewTimestamp=ts;pausedPreviewTimestamp=ts}else{lastPreviewTimestamp=pausedPreviewTimestamp}drawPreviewFrame(ts);animationId=requestAnimationFrame(tick)};animationId=requestAnimationFrame(tick)}
 previewPlayPauseBtn.addEventListener('click',()=>{if(!alignedFrames.length)return;previewPlaying=!previewPlaying;if(!previewPlaying)pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent=previewPlaying?'⏸ Pausar preview':'▶️ Dar play no preview';setStatus(previewPlaying?'Preview em reprodução.':'Preview pausado. Você pode marcar o ponto com mais precisão.');drawPreviewFrame(lastPreviewTimestamp)});
-selectPointBtn.addEventListener('click',()=>{if(!frameCanvases.length)return;previewPlaying=false;pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent='▶️ Dar play no preview';selectingPoint=true;canvas.classList.add('point-mode');drawPreviewFrame(lastPreviewTimestamp);setStatus('Preview pausado. Clique no ponto principal do objeto com precisão.')});
-canvas.addEventListener('click',e=>{if(!selectingPoint||!frameCanvases.length)return;const r=canvas.getBoundingClientRect();keypoint={x:(e.clientX-r.left)/r.width*frameCanvases[0].width,y:(e.clientY-r.top)/r.height*frameCanvases[0].height};perspectivePoints=frameCanvases.map(()=>({...keypoint}));selectedPointFrame=0;selectingPoint=false;canvas.classList.remove('point-mode');applyPointBtn.disabled=false;clearPointBtn.disabled=false;computeAnchorOffsets();buildTrackingTemplates();setStatus('Ponto âncora registrado em todos os quadros. Agora você pode corrigir o ponto de cada perspectiva clicando nos quadros abaixo.');renderThumbs()});
+selectPointBtn.addEventListener('click',()=>{if(!frameCanvases.length)return;previewPlaying=false;pausedPreviewTimestamp=lastPreviewTimestamp;previewPlayPauseBtn.textContent='▶️ Dar play no preview';selectingPoint=true;canvas.classList.add('point-mode');drawPreviewFrame(lastPreviewTimestamp);setStatus('Preview pausado. Clique no ponto principal usando a imagem 2 como base visual.')});
+canvas.addEventListener('click',e=>{
+  if(!selectingPoint||!frameCanvases.length)return;
+
+  const r=canvas.getBoundingClientRect();
+  const mainIndex=Math.min(1,frameCanvases.length-1);
+  const mainFrame=frameCanvases[mainIndex];
+
+  // Como a lógica atual usa a imagem 2 como principal,
+  // o clique no preview agora é interpretado como ponto da perspectiva 2.
+  keypoint={
+    x:(e.clientX-r.left)/r.width*mainFrame.width,
+    y:(e.clientY-r.top)/r.height*mainFrame.height
+  };
+
+  perspectivePoints=autoMatchPerspectivePoints(keypoint);
+  selectedPointFrame=mainIndex;
+  selectingPoint=false;
+  canvas.classList.remove('point-mode');
+  applyPointBtn.disabled=false;
+  clearPointBtn.disabled=false;
+  computeAnchorOffsets();
+  buildTrackingTemplates();
+  setStatus('Ponto âncora registrado. A ferramenta tentou encontrar o mesmo ponto nas outras perspectivas. Confira e corrija se necessário.');
+  renderThumbs();
+});
 applyPointBtn.addEventListener('click',()=>{if(!keypoint)return;if(!perspectivePoints.length)perspectivePoints=frameCanvases.map(()=>({...keypoint}));computeAnchorOffsets();buildTrackingTemplates();alignmentApplied=true;manualOffsetX=manualOffsetY=0;manualZoom=1;rebuildAlignedFrames();startPreviewLoop();exportBtn.disabled=false;canvas.classList.add('frame-mode');setStatus('Imagem 2 definida como base principal. O centro deve ficar fiel, e as bordas/fundo devem criar o movimento 3D.')});
 clearPointBtn.addEventListener('click',()=>{keypoint=null;perspectivePoints=[];selectedPointFrame=0;trackingTemplates=[];activeAlignmentPoints=null;alignmentApplied=false;manualOffsetX=manualOffsetY=0;manualZoom=1;canvas.classList.remove('frame-mode');applyPointBtn.disabled=true;clearPointBtn.disabled=true;rebuildAlignedFrames();renderThumbs();setStatus('Alinhamento limpo.')});
 function canManualFrame(){return frameCanvases.length&&!selectingPoint&&alignmentApplied}
@@ -336,7 +360,8 @@ function applyRgb(target){const amt=Number(rgbAdjustInput.value||0);if(amt<=0)re
 function computeAnchorOffsets(){
   anchorOffsets=[];
   if(!perspectivePoints.length || !keypoint) return;
-  const anchor = perspectivePoints[0] || keypoint;
+  const mainIndex=Math.min(1,perspectivePoints.length-1);
+  const anchor = perspectivePoints[mainIndex] || keypoint;
   renderAnchorPoint = {x: anchor.x, y: anchor.y};
   anchorOffsets = perspectivePoints.map(point => {
     const p = point || keypoint;
@@ -355,6 +380,20 @@ function getAnchorOffsetFor(frameIndex){
 
 function getRenderAnchorPoint(){
   return activeRenderAnchorPoint || renderAnchorPoint || keypoint || {x:0,y:0};
+}
+
+
+function autoMatchPerspectivePoints(clickedPoint){
+  if(!frameCanvases.length) return [];
+  const mainIndex = Math.min(1, frameCanvases.length - 1); // imagem 2 como referência principal
+  const template = createTemplate(frameCanvases[mainIndex], clickedPoint, 20);
+  const radius = Math.max(90, Math.round(frameCanvases[mainIndex].width * 0.22));
+
+  return frameCanvases.map((frame, i) => {
+    if(i === mainIndex) return {...clickedPoint};
+    const match = trackSinglePoint(frame, template, clickedPoint, radius);
+    return {x: match.x, y: match.y};
+  });
 }
 
 function buildTrackingTemplates(){
