@@ -62,3 +62,10 @@ Esta é uma versão MVP. Para melhor performance, comece com vídeos curtos de 5
 ## Correção — Upload após painel minimizado
 
 Corrigido um conflito em que as funções do painel de ajuste de pontos ficavam presas dentro de um evento de slider, impedindo o carregamento correto do vídeo em alguns navegadores.
+
+## Atualização — Tracking V2
+
+- O tracking agora usa uma área maior ao redor do ponto marcado.
+- A busca do ponto acontece em múltiplas etapas: ampla, média e ajuste fino.
+- O template do ponto é atualizado dinamicamente durante a exportação, para acompanhar mudanças de luz e movimento.
+- Foi adicionada suavização para reduzir tremidas entre frames.

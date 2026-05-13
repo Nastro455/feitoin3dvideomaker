@@ -33,7 +33,7 @@
 </div></details>
 <details class="card" open><summary>3. Movimento 3D e exportação</summary><div class="details-body">
 <div class="field"><label for="wiggleSpeed">Velocidade do efeito 3D</label><div class="range-row"><input id="wiggleSpeed" type="range" min="1" max="12" step="1" value="5" /><output id="wiggleSpeedValue">5</output></div></div>
-<div class="field"><label for="motionStyle">Estilo do movimento</label><select id="motionStyle"><option value="boomerang" selected>Vai e volta — 1, 2, 3, 2</option><option value="loop">Loop contínuo — 1, 2, 3, 1</option></select></div><div class="field"><label class="check-row" for="trackPointToggle"><input id="trackPointToggle" type="checkbox" checked><span><strong>Rastrear ponto durante a exportação</strong><span>Acompanha o ponto marcado ao longo do vídeo para estabilizar melhor o movimento 3D.</span></span></label></div>
+<div class="field"><label for="motionStyle">Estilo do movimento</label><select id="motionStyle"><option value="boomerang" selected>Vai e volta — 1, 2, 3, 2</option><option value="loop">Loop contínuo — 1, 2, 3, 1</option></select></div><div class="field"><label class="check-row" for="trackPointToggle"><input id="trackPointToggle" type="checkbox" checked><span><strong>Rastrear ponto durante a exportação</strong><span>Acompanha e atualiza o ponto ao longo do vídeo para estabilizar melhor o movimento 3D.</span></span></label></div>
 <div class="field"><label for="outputRatio">Formato final</label><select id="outputRatio"><option value="source" selected>Mesmo formato do recorte</option><option value="vertical">Vertical 9:16</option><option value="square">Quadrado 1:1</option><option value="horizontal">Horizontal 16:9</option><option value="fourthree">Clássico 4:3</option></select></div>
 <div class="field"><label for="outputQuality">Qualidade</label><select id="outputQuality"><option value="preview">Leve — 720p</option><option value="standard" selected>Padrão — até 1080p</option><option value="high">Alta — até 1440p</option></select></div>
 <div class="field"><label for="exportFormat">Formato de exportação</label><select id="exportFormat"><option value="webm" selected>WebM — mais compatível</option><option value="mp4">MP4 — se o navegador suportar</option></select><p class="mini-note">No Chrome/Edge, WebM costuma ser mais seguro. MP4 depende do suporte do navegador.</p></div>
@@ -238,11 +238,13 @@ function applySharpness(target){return}
 function applyGlow(target){const glow=Number(glowAdjustInput.value||0);if(glow<=0)return;const w=target.width,h=target.height,bright=document.createElement('canvas');bright.width=w;bright.height=h;const bctx=bright.getContext('2d',{willReadFrequently:true});bctx.drawImage(target,0,0);const img=bctx.getImageData(0,0,w,h),d=img.data,th=190-glow*.45;for(let i=0;i<d.length;i+=4){const lum=d[i]*.299+d[i+1]*.587+d[i+2]*.114;if(lum<th)d[i]=d[i+1]=d[i+2]=d[i+3]=0}bctx.putImageData(img,0,0);const c=target.getContext('2d');c.save();c.globalCompositeOperation='screen';c.globalAlpha=.10+glow/160;c.filter='blur('+(2+glow/8)+'px)';c.drawImage(bright,0,0);c.restore()}
 function applyRgb(target){const amt=Number(rgbAdjustInput.value||0);if(amt<=0)return;const src=document.createElement('canvas');src.width=target.width;src.height=target.height;src.getContext('2d').drawImage(target,0,0);const c=target.getContext('2d');c.save();c.globalCompositeOperation='screen';c.globalAlpha=.35;c.drawImage(src,-amt,0);c.drawImage(src,amt,0);c.restore()}
 
+
 function buildTrackingTemplates(){
   trackingTemplates=[];
   if(!frameCanvases.length||!perspectivePoints.length)return;
-  trackingTemplates=frameCanvases.map((frame,i)=>createTemplate(frame,perspectivePoints[i]||keypoint,9));
+  trackingTemplates=frameCanvases.map((frame,i)=>createTemplate(frame,perspectivePoints[i]||keypoint,18));
 }
+
 function createTemplate(frame,point,half){
   if(!point)return null;
   const c=frame.getContext('2d',{willReadFrequently:true});
@@ -259,52 +261,101 @@ function createTemplate(frame,point,half){
       gray.push(Math.round(img[p]*.299+img[p+1]*.587+img[p+2]*.114));
     }
   }
-  return{gray,w,h,half,step:2};
+  return{gray,w,h,half,step:2,updatedAt:0};
 }
+
 function trackFramePoints(frames,previousPoints){
   if(!trackingTemplates.length)return previousPoints;
   const tracked=[];
+
   for(let i=0;i<frames.length;i++){
     const template=trackingTemplates[i];
     const prev=previousPoints[i]||perspectivePoints[i]||keypoint;
-    if(!template||!prev){tracked.push(prev);continue}
-    tracked.push(trackSinglePoint(frames[i],template,prev,48));
+
+    if(!template||!prev){
+      tracked.push(prev);
+      continue;
+    }
+
+    const result=trackSinglePoint(frames[i],template,prev,70);
+    tracked.push({x:result.x,y:result.y});
+
+    // Atualiza o template de forma dinâmica para acompanhar mudanças de luz,
+    // rotação pequena e alteração de aparência do ponto ao longo do vídeo.
+    // Isso reduz o efeito de "tracking preso no primeiro frame".
+    if(result.confidence > 0.48){
+      trackingTemplates[i]=createTemplate(frames[i],{x:result.x,y:result.y},18)||template;
+    }
   }
-  return tracked;
+
+  return smoothTrackedPoints(previousPoints, tracked, 0.72);
 }
+
+function smoothTrackedPoints(previousPoints,nextPoints,amount){
+  return nextPoints.map((p,i)=>{
+    const prev=previousPoints[i];
+    if(!p||!prev)return p||prev;
+    return {
+      x: prev.x*(1-amount)+p.x*amount,
+      y: prev.y*(1-amount)+p.y*amount
+    };
+  });
+}
+
 function trackSinglePoint(frame,template,prev,searchRadius){
   const c=frame.getContext('2d',{willReadFrequently:true});
   const img=c.getImageData(0,0,frame.width,frame.height).data;
+
   let best={x:prev.x,y:prev.y,score:Infinity};
-  const candidateStep=4;
-  const patchStep=template.step||2;
-  const sampleW=Math.ceil(template.w/patchStep);
   const half=template.half;
-  const minX=clamp(Math.round(prev.x-searchRadius),half,frame.width-half-1);
-  const maxX=clamp(Math.round(prev.x+searchRadius),half,frame.width-half-1);
-  const minY=clamp(Math.round(prev.y-searchRadius),half,frame.height-half-1);
-  const maxY=clamp(Math.round(prev.y+searchRadius),half,frame.height-half-1);
-  for(let y=minY;y<=maxY;y+=candidateStep){
-    for(let x=minX;x<=maxX;x+=candidateStep){
-      let score=0,idxT=0;
-      for(let py=-half;py<=half;py+=patchStep){
-        const yy=clamp(y+py,0,frame.height-1);
-        for(let px=-half;px<=half;px+=patchStep){
-          const xx=clamp(x+px,0,frame.width-1);
-          const p=(yy*frame.width+xx)*4;
-          const g=Math.round(img[p]*.299+img[p+1]*.587+img[p+2]*.114);
-          const diff=g-template.gray[idxT++];
-          score+=diff*diff;
+
+  function scoreAt(x,y,patchStep){
+    let score=0;
+    let idxT=0;
+    let count=0;
+    for(let py=-half;py<=half;py+=patchStep){
+      const yy=clamp(Math.round(y+py),0,frame.height-1);
+      for(let px=-half;px<=half;px+=patchStep){
+        const xx=clamp(Math.round(x+px),0,frame.width-1);
+        const p=(yy*frame.width+xx)*4;
+        const g=Math.round(img[p]*.299+img[p+1]*.587+img[p+2]*.114);
+        const diff=g-template.gray[idxT++]||0;
+        score+=Math.abs(diff);
+        count++;
+      }
+    }
+    return score/Math.max(1,count);
+  }
+
+  function searchAround(cx,cy,radius,step,patchStep){
+    const minX=clamp(Math.round(cx-radius),half,frame.width-half-1);
+    const maxX=clamp(Math.round(cx+radius),half,frame.width-half-1);
+    const minY=clamp(Math.round(cy-radius),half,frame.height-half-1);
+    const maxY=clamp(Math.round(cy+radius),half,frame.height-half-1);
+
+    for(let y=minY;y<=maxY;y+=step){
+      for(let x=minX;x<=maxX;x+=step){
+        let score=scoreAt(x,y,patchStep);
+        const driftPenalty=(Math.abs(x-prev.x)+Math.abs(y-prev.y))*0.45;
+        score+=driftPenalty;
+
+        if(score<best.score){
+          best={x,y,score};
         }
       }
-      const driftPenalty=(Math.abs(x-prev.x)+Math.abs(y-prev.y))*12;
-      score+=driftPenalty;
-      if(score<best.score)best={x,y,score};
     }
   }
-  return{x:best.x,y:best.y};
+
+  // Busca em 3 etapas: ampla, média e ajuste fino.
+  searchAround(prev.x,prev.y,searchRadius,8,4);
+  searchAround(best.x,best.y,18,3,2);
+  searchAround(best.x,best.y,5,1,2);
+
+  const confidence=clamp(1-(best.score/95),0,1);
+  return {x:best.x,y:best.y,score:best.score,confidence};
 }
-exportBtn.addEventListener('click',async()=>{if(!sourceVideo.src||isExporting)return;isExporting=true;exportBtn.disabled=true;downloadLink.classList.remove('show');showProgress(0,'Preparando exportação...');const durationLimit=maxDurationSelect.value==='full'?sourceVideo.duration:Math.min(Number(maxDurationSelect.value),sourceVideo.duration||Number(maxDurationSelect.value));const refW=frameCanvases[0]?.width||sourceVideo.videoWidth/getFrameCount(),refH=frameCanvases[0]?.height||sourceVideo.videoHeight,{width,height}=getOutputSize(refW,refH),exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;const exportCtx=exportCanvas.getContext('2d'),stream=exportCanvas.captureStream(30),mime=getRecorderMimeType();if(!mime){hideProgress();isExporting=false;exportBtn.disabled=false;setStatus('Este navegador não suporta gravação via MediaRecorder.');return}recordedChunks=[];mediaRecorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:outputQualitySelect.value==='high'?9000000:outputQualitySelect.value==='preview'?3500000:6000000});mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data)};mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:mime}),url=URL.createObjectURL(blob),ext=mime.includes('mp4')?'mp4':'webm';downloadLink.href=url;downloadLink.download='feitoin3d-video-maker.'+ext;downloadLink.textContent='Baixar vídeo '+ext.toUpperCase();downloadLink.classList.add('show');setStatus('Exportação finalizada.');hideProgress();isExporting=false;exportBtn.disabled=false};let trackedPoints=perspectivePoints.map(p=>p?({...p}):p);if(trackPointToggle.checked&&keypoint)buildTrackingTemplates();await seekVideo(0);sourceVideo.muted=true;mediaRecorder.start(250);await sourceVideo.play();const start=performance.now();const drawExport=()=>{if(!isExporting)return;const current=sourceVideo.currentTime,progress=clamp(current/durationLimit,0,1);showProgress(progress,trackPointToggle.checked?'Rastreando e exportando vídeo 3D...':'Exportando vídeo 3D...');const currentFrame=document.createElement('canvas');currentFrame.width=sourceVideo.videoWidth;currentFrame.height=sourceVideo.videoHeight;currentFrame.getContext('2d').drawImage(sourceVideo,0,0,currentFrame.width,currentFrame.height);const split=splitFrameCanvas(currentFrame);if(trackPointToggle.checked&&keypoint&&trackingTemplates.length){trackedPoints=trackFramePoints(split,trackedPoints);activeAlignmentPoints=trackedPoints}else{activeAlignmentPoints=null}rebuildAlignedFrames(split);activeAlignmentPoints=null;const idx=getCurrentPerspectiveIndex(performance.now()-start);exportCtx.clearRect(0,0,exportCanvas.width,exportCanvas.height);exportCtx.drawImage(alignedFrames[idx]||alignedFrames[0],0,0);if(current>=durationLimit||sourceVideo.ended){sourceVideo.pause();mediaRecorder.stop();rebuildAlignedFrames(frameCanvases);startPreviewLoop();return}requestAnimationFrame(drawExport)};requestAnimationFrame(drawExport)});
+
+exportBtn.addEventListener('click',async()=>{if(!sourceVideo.src||isExporting)return;isExporting=true;exportBtn.disabled=true;downloadLink.classList.remove('show');showProgress(0,'Preparando exportação...');const durationLimit=maxDurationSelect.value==='full'?sourceVideo.duration:Math.min(Number(maxDurationSelect.value),sourceVideo.duration||Number(maxDurationSelect.value));const refW=frameCanvases[0]?.width||sourceVideo.videoWidth/getFrameCount(),refH=frameCanvases[0]?.height||sourceVideo.videoHeight,{width,height}=getOutputSize(refW,refH),exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;const exportCtx=exportCanvas.getContext('2d'),stream=exportCanvas.captureStream(30),mime=getRecorderMimeType();if(!mime){hideProgress();isExporting=false;exportBtn.disabled=false;setStatus('Este navegador não suporta gravação via MediaRecorder.');return}recordedChunks=[];mediaRecorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:outputQualitySelect.value==='high'?9000000:outputQualitySelect.value==='preview'?3500000:6000000});mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data)};mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:mime}),url=URL.createObjectURL(blob),ext=mime.includes('mp4')?'mp4':'webm';downloadLink.href=url;downloadLink.download='feitoin3d-video-maker.'+ext;downloadLink.textContent='Baixar vídeo '+ext.toUpperCase();downloadLink.classList.add('show');setStatus('Exportação finalizada.');hideProgress();isExporting=false;exportBtn.disabled=false};let trackedPoints=perspectivePoints.map(p=>p?({...p}):p);if(trackPointToggle.checked&&keypoint)buildTrackingTemplates();await seekVideo(0);sourceVideo.muted=true;mediaRecorder.start(250);await sourceVideo.play();const start=performance.now();const drawExport=()=>{if(!isExporting)return;const current=sourceVideo.currentTime,progress=clamp(current/durationLimit,0,1);showProgress(progress,trackPointToggle.checked?'Rastreando ponto e exportando vídeo 3D...':'Exportando vídeo 3D...');const currentFrame=document.createElement('canvas');currentFrame.width=sourceVideo.videoWidth;currentFrame.height=sourceVideo.videoHeight;currentFrame.getContext('2d').drawImage(sourceVideo,0,0,currentFrame.width,currentFrame.height);const split=splitFrameCanvas(currentFrame);if(trackPointToggle.checked&&keypoint&&trackingTemplates.length){trackedPoints=trackFramePoints(split,trackedPoints);activeAlignmentPoints=trackedPoints}else{activeAlignmentPoints=null}rebuildAlignedFrames(split);activeAlignmentPoints=null;const idx=getCurrentPerspectiveIndex(performance.now()-start);exportCtx.clearRect(0,0,exportCanvas.width,exportCanvas.height);exportCtx.drawImage(alignedFrames[idx]||alignedFrames[0],0,0);if(current>=durationLimit||sourceVideo.ended){sourceVideo.pause();mediaRecorder.stop();rebuildAlignedFrames(frameCanvases);startPreviewLoop();return}requestAnimationFrame(drawExport)};requestAnimationFrame(drawExport)});
 function getRecorderMimeType(){const wants=exportFormatSelect.value==='mp4',cand=wants?['video/mp4;codecs=h264','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']:['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];return cand.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))}
 function showProgress(p,title){progressOverlay.classList.add('show');const pct=Math.round(p*100);progressText.textContent=pct+'%';progressRing.style.background='conic-gradient(var(--success) '+(pct*3.6)+'deg, rgba(255,255,255,.12) 0deg)';progressTitle.textContent=title||'Exportando vídeo 3D...';progressNote.textContent=p<.98?'Processando frames. Não feche esta aba.':'Finalizando arquivo...'}
 function hideProgress(){setTimeout(()=>progressOverlay.classList.remove('show'),700)}
